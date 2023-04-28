@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>einmeterhecht's heat art</title>
+        <script id="vertexshader_passthrough_2d.glsl" type="text/glsl">
+            precision highp float;
+            attribute vec2 vp;
+            void main () {
+                gl_Position = vec4 (vp, 0.5, 1.0);
+              }
+        </script>
+        <script id="fragmentshader_initialise_heat.glsl" type="text/glsl">
+            precision highp float;
+
+            INSERT_PACK_FUNCTIONS_HERE
+
+            float gln_rand(vec2 p) {
+              // from https://github.com/FarazzShaikh/glNoise/blob/master/src/Common.glsl (MIT license)
+              return fract(1e4 * sin(17.0 * p.x + p.y * 0.1) *
+                           (0.1 + abs(sin(p.y * 13.0 + p.x))));
+            }
+
+            void main () {
+              if (gln_rand(vec2(gl_FragCoord.xy)) < PROBABILITY_FOR_HOT_SPOT) {
+                gl_FragColor.rg = pack_heat(HOT_SPOT_HEAT);
+              }
+              else {
+                gl_FragColor.rg = pack_heat(COLD_CELL_HEAT);
+              }
+              /*if (length(gl_FragCoord.xy - vec2(32., 32.)) < 1.) gl_FragColor.r = HOT_SPOT_HEAT*PACK_HEAT;
+              else gl_FragColor.r = pack_heat(COLD_CELL_HEAT);*/
+            }
+        </script>
+        <script id="fragmentshader_heat_to_screen_debug.glsl" type="text/glsl">
+            precision highp float;
+            uniform sampler2D heat;
+            uniform vec2 inverseCanvasSize;
+
+            INSERT_PACK_FUNCTIONS_HERE
+            
+            void main () {
+              float red = clamp(texture2D(heat,
+               vec2(gl_FragCoord.xy)*inverseCanvasSize).r, 0., 1.);
+               float green = clamp(unpack_boost(texture2D(heat,
+                 vec2(gl_FragCoord.xy)*inverseCanvasSize))/8., 0., 1.);
+              green = clamp(texture2D(heat,
+                vec2(gl_FragCoord.xy)*inverseCanvasSize).a, 0., 1.);
+              gl_FragColor = vec4(red, green, 0., 1.);
+            }
+        </script>
+        <script id="fragmentshader_heat_to_screen.glsl" type="text/glsl">
+            precision highp float;
+            uniform sampler2D heat;
+            uniform vec2 inverseCanvasSize;
+
+            INSERT_PACK_FUNCTIONS_HERE
+            
+            void main () {
+              float heat_here = unpack_heat(texture2D(heat,
+               vec2(gl_FragCoord.xy)*inverseCanvasSize));
+              
+              float red = (heat_here - 2.) * 0.2;
+              float green = 0.;
+              float blue = (heat_here - 2.) * -0.4;
+              gl_FragColor = vec4(red, green, blue, 1.);
+            }
+        </script>
+        <script id="fragmentshader_calc_surroundingWarmth.glsl" type="text/glsl">
+          precision highp float;
+
+          uniform sampler2D heat_boost;
+
+          uniform vec2 inverseCellCount;
+
+          INSERT_PACK_FUNCTIONS_HERE
+
+          float get_unidirectional_heat_demand(float heat_here, float heat_there,
+             int x_diff, int y_diff) {
+            if (heat_here * COMPARISON_FACTOR_FOR_HOT_CELL < heat_there) {
+              // One divided by distance squared
+              // Don't give too much heat to cells that are way hotter than this cell
+              return 1. / float(x_diff * x_diff + y_diff * y_diff);
+            }
+            else {
+              // Square root of heat there divided by distance squared
+              // The more heat there already is, the more it will get from here
+              return sqrt(heat_there) / float(x_diff * x_diff + y_diff * y_diff);
+            }
+          }
+
+          void main () {
+            float heat_here = unpack_heat(texture2D(
+              heat_boost, gl_FragCoord.xy*inverseCellCount));
+
+            float totalsurroundingWarmth_here = 0.;
+            for (int x_diff=-RADIUS; x_diff<RADIUS+1; x_diff++) {
+              for (int y_diff=-RADIUS; y_diff<RADIUS+1; y_diff++) {
+                if (x_diff == 0 && y_diff == 0) {
+                  continue;
+                }
+                totalsurroundingWarmth_here += get_unidirectional_heat_demand(
+                  heat_here, unpack_heat(texture2D(
+                    heat_boost, (gl_FragCoord.xy + vec2(x_diff, y_diff)) * inverseCellCount)),
+                  x_diff, y_diff);
+              }
+            }
+            // Pack by high-byte / low.byte (map range 0. - 256. to 0. - 1.)
+            gl_FragColor.rg = pack_surroundingWarmth(totalsurroundingWarmth_here);
+          }
+        </script>
+
+        <script id="fragmentshader_calc_next_heat_boost.glsl" type="text/glsl">
+          precision highp float;
+
+          uniform sampler2D heat_boost;
+          uniform sampler2D surroundingWarmth;
+
+          uniform vec2 inverseCellCount;
+
+          INSERT_PACK_FUNCTIONS_HERE
+
+          float get_bidirectional_heat_transfer(
+            float heat_here,
+            float surroundingWarmth_here,
+            int x_diff, int y_diff) {
+            
+            float heat_there = unpack_heat(texture2D(
+              heat_boost, (gl_FragCoord.xy + vec2(x_diff, y_diff)) * inverseCellCount));
+            float surroundingWarmth_there = unpack_surroundingWarmth(texture2D(
+              surroundingWarmth, (gl_FragCoord.xy + vec2(x_diff, y_diff)) * inverseCellCount).rg);
+            
+            float give_heat = 0.;
+            float receive_heat = 0.;
+
+            if (surroundingWarmth_here > 0.01) {
+              // Give heat
+              give_heat = heat_here / surroundingWarmth_here;
+              if (heat_here * COMPARISON_FACTOR_FOR_HOT_CELL < heat_there) {
+                  give_heat *= sqrt(heat_there);
+              }
+            }
+            if (surroundingWarmth_there > 0.01) {
+              // Receive heat
+              receive_heat = heat_there / surroundingWarmth_there;
+              if (heat_there * COMPARISON_FACTOR_FOR_HOT_CELL < heat_here) {
+                  receive_heat *= sqrt(heat_here);
+              }
+            }
+            return ((receive_heat - give_heat) * HEAT_PERCENTAGE_EXCHANGED
+                    / float(x_diff * x_diff + y_diff * y_diff));
+          }
+
+          void main () {
+            vec4 heat_boost_here = texture2D(
+              heat_boost, gl_FragCoord.xy*inverseCellCount);
+            float heat_here = unpack_heat(heat_boost_here);
+            float boost_here = unpack_boost(heat_boost_here);
+            float surroundingWarmth_here = unpack_surroundingWarmth(texture2D(
+              surroundingWarmth, gl_FragCoord.xy*inverseCellCount).rg);
+            
+            float heat_gained = 0.;
+
+            for (int x_diff=-RADIUS; x_diff<RADIUS+1; x_diff++) {
+              for (int y_diff=-RADIUS; y_diff<RADIUS+1; y_diff++) {
+                if (x_diff == 0 && y_diff == 0) {
+                  continue;
+                }
+                heat_gained += get_bidirectional_heat_transfer(
+                  heat_here, surroundingWarmth_here,
+                  x_diff, y_diff);
+              }
+            }
+
+            heat_here += heat_gained;
+
+            if (boost_here > 0.4) {
+              heat_here += boost_here;
+              boost_here *= BOOST_DECAY;
+            }
+            else {
+              heat_here -= BASE_HEATLOSS + 1. / max(surroundingWarmth_here * SURROUNDINGWARMTH_IMPACT_ON_HEATLOSS, 1.);
+              if (heat_here < MINIMAL_HEAT_BEFORE_BOOST) {
+                heat_here = MINIMAL_HEAT_BEFORE_BOOST;
+                boost_here = BOOST_STRENGTH;
+              }
+            }
+            gl_FragColor = vec4(pack_heat(heat_here), pack_boost(boost_here));//.r, pack_surroundingWarmth(surroundingWarmth_here).r);
+            return;
+          }
+        </script>
+        <style>
+          .main_canvas {
+              position:fixed;
+              left:0;
+              top:0;
+              width:100%;
+              height:100%;
+          }
+        </style>
+    </head>
+<body>
+<canvas id="mycanvas" class="main_canvas">
+Your browser doesn't support HTML5.
+</canvas>
+</body>
+<script src="constants.js"></script>
+<script src="renderer.js"></script>
+</html>
