@@ -303,5 +303,5 @@ function main_loop() {
   window.requestAnimFrame(main_loop, canvas);
 }
 
-canvas.onclick = main_loop;
-//main_loop();
+//canvas.onclick = main_loop;
+main_loop();
