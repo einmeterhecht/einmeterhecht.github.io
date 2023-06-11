@@ -235,8 +235,6 @@ function main_loop() {
   gl.viewport(0, 0, canvas.width, canvas.height);
   gl.clearColor(0., 0., 0.2, 1.);
   gl.clear(gl.COLOR_BUFFER_BIT);
-  /*gl.activeTexture(gl.TEXTURE0);
-  gl.bindTexture(gl.TEXTURE_2D, texture);*/
   gl.useProgram(heatToScreen_program);
   gl.activeTexture(gl.TEXTURE0);
   gl.bindTexture(gl.TEXTURE_2D, heat_boost_current);
