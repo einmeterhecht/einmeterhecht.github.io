@@ -57,30 +57,8 @@
             //INSERT_PACK_FUNCTIONS_HERE
             
             void main () {
-              vec2 cell_index = gl_FragCoord.xy*inverseCanvasSize/INVERSE_CELL_COUNT;
-              vec2 coords_rounded_down = floor(cell_index)*INVERSE_CELL_COUNT;
-              vec2 coords_rounded_up   =  ceil(cell_index)*INVERSE_CELL_COUNT;
-              vec2 distance_from_floor_samples = fract(cell_index);
-              vec2 distance_from_ceil_samples = vec2(1., 1.) - distance_from_floor_samples;
-
-              float heat_sample00 = unpack_heat(texture2D(heat, coords_rounded_down.xy));
-              float heat_sample01 = unpack_heat(texture2D(heat, vec2(coords_rounded_down.x, coords_rounded_up.y)));
-              float heat_sample10 = unpack_heat(texture2D(heat, vec2(coords_rounded_up.x, coords_rounded_down.y)));
-              float heat_sample11 = unpack_heat(texture2D(heat, coords_rounded_up.xy));
-              
               float heat_here = unpack_heat(texture2D(heat,
                gl_FragCoord.xy*inverseCanvasSize));
-              /*
-              heat_here = (heat_sample11 * length(distance_from_floor_samples)
-                         + heat_sample10 * length(vec2(distance_from_floor_samples.x,distance_from_ceil_samples.y))
-                         + heat_sample01 * length(vec2(distance_from_ceil_samples.x,distance_from_floor_samples.y))
-                         + heat_sample00 * length(distance_from_ceil_samples))/8.;
-              */
-              heat_here = (heat_sample11 / (distance_from_floor_samples.x+distance_from_floor_samples.y)
-                         + heat_sample10 / ((distance_from_floor_samples.x+distance_from_ceil_samples.y))
-                         + heat_sample01 / ((distance_from_ceil_samples.x+distance_from_floor_samples.y))
-                         + heat_sample00 / (distance_from_ceil_samples.x+distance_from_ceil_samples.y))/4.;
-              //heat_here = (distance_from_floor_samples.x+distance_from_floor_samples.y)*7.;
               float red = (heat_here - 2.) * 0.2;
               float green = 0.;
               float blue = (heat_here - 2.) * -0.4;
