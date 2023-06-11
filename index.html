@@ -2,7 +2,7 @@
 <html>
     <head>
         <meta charset="utf-8">
-        <title>einmeterhecht</title>
+        <title>einmeterhecht's heat art</title>
         <script id="vertexshader_passthrough_2d.glsl" type="text/glsl">
             precision highp float;
             attribute vec2 vp;
@@ -13,7 +13,7 @@
         <script id="fragmentshader_initialise_heat.glsl" type="text/glsl">
             precision highp float;
 
-            INSERT_PACK_FUNCTIONS_HERE
+            //INSERT_PACK_FUNCTIONS_HERE
 
             float gln_rand(vec2 p) {
               // from https://github.com/FarazzShaikh/glNoise/blob/master/src/Common.glsl (MIT license)
@@ -22,7 +22,7 @@
             }
 
             void main () {
-              if (gln_rand(vec2(gl_FragCoord.xy)) < PROBABILITY_FOR_HOT_SPOT) {
+              if (gln_rand(gl_FragCoord.xy) < PROBABILITY_FOR_HOT_SPOT) {
                 gl_FragColor.rg = pack_heat(HOT_SPOT_HEAT);
               }
               else {
@@ -37,15 +37,15 @@
             uniform sampler2D heat;
             uniform vec2 inverseCanvasSize;
 
-            INSERT_PACK_FUNCTIONS_HERE
+            //INSERT_PACK_FUNCTIONS_HERE
             
             void main () {
               float red = clamp(texture2D(heat,
-               vec2(gl_FragCoord.xy)*inverseCanvasSize).r, 0., 1.);
+               gl_FragCoord.xy*inverseCanvasSize).r, 0., 1.);
                float green = clamp(unpack_boost(texture2D(heat,
-                 vec2(gl_FragCoord.xy)*inverseCanvasSize))/8., 0., 1.);
+                 gl_FragCoord.xy*inverseCanvasSize))/8., 0., 1.);
               green = clamp(texture2D(heat,
-                vec2(gl_FragCoord.xy)*inverseCanvasSize).a, 0., 1.);
+                gl_FragCoord.xy*inverseCanvasSize).a, 0., 1.);
               gl_FragColor = vec4(red, green, 0., 1.);
             }
         </script>
@@ -54,12 +54,11 @@
             uniform sampler2D heat;
             uniform vec2 inverseCanvasSize;
 
-            INSERT_PACK_FUNCTIONS_HERE
+            //INSERT_PACK_FUNCTIONS_HERE
             
             void main () {
               float heat_here = unpack_heat(texture2D(heat,
-               vec2(gl_FragCoord.xy)*inverseCanvasSize));
-              
+               gl_FragCoord.xy*inverseCanvasSize));
               float red = (heat_here - 2.) * 0.2;
               float green = 0.;
               float blue = (heat_here - 2.) * -0.4;
@@ -71,9 +70,7 @@
 
           uniform sampler2D heat_boost;
 
-          uniform vec2 inverseCellCount;
-
-          INSERT_PACK_FUNCTIONS_HERE
+          //INSERT_PACK_FUNCTIONS_HERE
 
           float get_unidirectional_heat_demand(float heat_here, float heat_there,
              int x_diff, int y_diff) {
@@ -91,7 +88,7 @@
 
           void main () {
             float heat_here = unpack_heat(texture2D(
-              heat_boost, gl_FragCoord.xy*inverseCellCount));
+              heat_boost, gl_FragCoord.xy*INVERSE_CELL_COUNT));
 
             float totalsurroundingWarmth_here = 0.;
             for (int x_diff=-RADIUS; x_diff<RADIUS+1; x_diff++) {
@@ -101,7 +98,7 @@
                 }
                 totalsurroundingWarmth_here += get_unidirectional_heat_demand(
                   heat_here, unpack_heat(texture2D(
-                    heat_boost, (gl_FragCoord.xy + vec2(x_diff, y_diff)) * inverseCellCount)),
+                    heat_boost, (gl_FragCoord.xy + vec2(x_diff, y_diff)) * INVERSE_CELL_COUNT)),
                   x_diff, y_diff);
               }
             }
@@ -116,9 +113,7 @@
           uniform sampler2D heat_boost;
           uniform sampler2D surroundingWarmth;
 
-          uniform vec2 inverseCellCount;
-
-          INSERT_PACK_FUNCTIONS_HERE
+          //INSERT_PACK_FUNCTIONS_HERE
 
           float get_bidirectional_heat_transfer(
             float heat_here,
@@ -126,9 +121,9 @@
             int x_diff, int y_diff) {
             
             float heat_there = unpack_heat(texture2D(
-              heat_boost, (gl_FragCoord.xy + vec2(x_diff, y_diff)) * inverseCellCount));
+              heat_boost, (gl_FragCoord.xy + vec2(x_diff, y_diff)) * INVERSE_CELL_COUNT));
             float surroundingWarmth_there = unpack_surroundingWarmth(texture2D(
-              surroundingWarmth, (gl_FragCoord.xy + vec2(x_diff, y_diff)) * inverseCellCount).rg);
+              surroundingWarmth, (gl_FragCoord.xy + vec2(x_diff, y_diff)) * INVERSE_CELL_COUNT).rg);
             
             float give_heat = 0.;
             float receive_heat = 0.;
@@ -153,11 +148,11 @@
 
           void main () {
             vec4 heat_boost_here = texture2D(
-              heat_boost, gl_FragCoord.xy*inverseCellCount);
+              heat_boost, gl_FragCoord.xy*INVERSE_CELL_COUNT);
             float heat_here = unpack_heat(heat_boost_here);
             float boost_here = unpack_boost(heat_boost_here);
             float surroundingWarmth_here = unpack_surroundingWarmth(texture2D(
-              surroundingWarmth, gl_FragCoord.xy*inverseCellCount).rg);
+              surroundingWarmth, gl_FragCoord.xy*INVERSE_CELL_COUNT).rg);
             
             float heat_gained = 0.;
 
