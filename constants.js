@@ -1,7 +1,13 @@
 const CELLS_X = 128;
 const CELLS_Y = 128;
 
+const FRAMES_PER_SECOND = 32; // Seems to be limited to 30
 const ITERATIONS_PER_SECOND = 10;
+
+const LOG_FPS = false;
+
+const SKIP_FIRST_ITERATIONS = 6;
+const ONLY_RUN_MAINLOOP_ON_CLICK = false;
 
 const SHADER_CONSTANTS = {
     "INVERSE_CELL_COUNT" : "vec2(" + 1./CELLS_X + ", " + 1./CELLS_Y + ")",

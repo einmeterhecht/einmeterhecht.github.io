@@ -41,7 +41,7 @@ window.requestAnimFrame =(function() {
       window.oRequestAnimationFrame ||
       window.msRequestAnimationFrame ||
       function(callback, element) {
-        return window.setTimeout(callback, 2000/*1000 / 60*/);
+        return window.setTimeout(callback, 1);
       };
     })();
 
@@ -215,38 +215,13 @@ render_to_heat_boost_next = render_to_heat_boost_1;
 
 var iteration_index = 0;
 
-var time_last_frame = performance.now();
-function main_loop() {
-  //console.log("Mainloop...");
-  // update timers
-  var current_millis = performance.now();
-  var millis_since_last_frame = current_millis - time_last_frame;
-  if (millis_since_last_frame < 1000/ITERATIONS_PER_SECOND) {
-    // Only calculate a limited number of iterations each second
-    window.requestAnimFrame(main_loop, canvas);
-    return;
-  }
-
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+var stop_mainloop = true;
 
 
-  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  gl.viewport(0, 0, canvas.width, canvas.height);
-  gl.clearColor(0., 0., 0.2, 1.);
-  gl.clear(gl.COLOR_BUFFER_BIT);
-  gl.useProgram(heatToScreen_program);
-  gl.activeTexture(gl.TEXTURE0);
-  gl.bindTexture(gl.TEXTURE_2D, heat_boost_current);
-  gl.uniform1i(location_heat_in_heatToScreen_program, 0);
-  gl.uniform2f(location_inverseCanvasSize_in_heatToScreen_program, 1/1024, 1/1024);// 1./canvas.width, 1./canvas.height);
-  bind_square_vertexbuffer(location_vp_in_heatToScreen_program);
-  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
-
+function calc_next_iteration() {
   // Calculate surrounding warmth for each cell
   gl.useProgram(calc_surroundingWarmth_program);
-  
+    
   gl.bindFramebuffer(gl.FRAMEBUFFER, render_to_surroundingWarmth);
   gl.viewport(0, 0, CELLS_X, CELLS_Y);
 
@@ -294,12 +269,88 @@ function main_loop() {
   }
 
   iteration_index++;
-
-  time_last_frame = performance.now();
-  
-  // "automatically re-call this function please"
-  window.requestAnimFrame(main_loop, canvas);
 }
 
-//canvas.onclick = main_loop;
-main_loop();
+function render_heat_to_screen() {
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+
+function bind_for_rendering_to_screen() {
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  gl.clearColor(0., 0., 0.2, 1.);
+  //gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.useProgram(heatToScreen_program);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, heat_boost_current);
+  gl.uniform1i(location_heat_in_heatToScreen_program, 0);
+  gl.uniform2f(location_inverseCanvasSize_in_heatToScreen_program, 1/1024, 1/1024);// 1./canvas.width, 1./canvas.height);
+  bind_square_vertexbuffer(location_vp_in_heatToScreen_program);
+}
+
+function main_loop() {
+  //console.log("Mainloop...");
+  // update timers
+  var current_millis = performance.now();
+  var millis_since_last_frame = current_millis - time_last_frame;
+  var millis_since_last_iteration = current_millis - time_last_iteration;
+  var millis_since_last_second = current_millis - time_last_second;
+  
+  if (millis_since_last_frame > 990/FRAMES_PER_SECOND) {
+    // It's time to render to screen
+    time_last_frame = current_millis;
+    render_heat_to_screen();
+    frames_this_second++;
+  }
+
+  if (millis_since_last_iteration > 990/ITERATIONS_PER_SECOND) {
+    // It's time to calculate the next iteration
+    time_last_iteration = current_millis;
+    calc_next_iteration();
+
+    bind_for_rendering_to_screen();
+    iterations_this_second++;
+  }
+  
+  if (millis_since_last_second > 999) {
+    // It's time to log FPS and iterations during the past second
+    time_last_second = current_millis;
+    if (LOG_FPS) {
+      console.log("Frames per second: " + String(frames_this_second) + " / " + String(FRAMES_PER_SECOND));
+      console.log("Iterations per second: " + String(iterations_this_second) + " / " + String(ITERATIONS_PER_SECOND));
+    }
+    frames_this_second = 0;
+    iterations_this_second = 0;
+  }
+
+  if (!stop_mainloop) {
+    // "automatically re-call this function please"
+    // -> Mainloop runs at 30Hz at the maximum and is paused automatically when the window is not visible
+    window.requestAnimFrame(main_loop, canvas);
+  }
+}
+
+function do_loop_and_log_iteration_index() {
+  main_loop();
+  console.log("Iteration:" + String(iteration_index));
+}
+
+for (i=0; i<SKIP_FIRST_ITERATIONS; i++) {
+  calc_next_iteration();
+}
+
+bind_for_rendering_to_screen();
+render_heat_to_screen();
+
+var time_last_frame = performance.now();
+var time_last_iteration = performance.now();
+var time_last_second = performance.now();
+
+var frames_this_second = 0;
+var iterations_this_second = 0;
+
+stop_mainloop = ONLY_RUN_MAINLOOP_ON_CLICK;
+if (!ONLY_RUN_MAINLOOP_ON_CLICK) main_loop();
+else canvas.onclick = do_loop_and_log_iteration_index;
