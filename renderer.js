@@ -2,20 +2,30 @@
 (c) 2023 einmeterhecht
 
 This is my first WebGL project, so much of the code is a copy from a tutorial.
-Credits go to those three sites:
+Credits go to those three websites:
 
 https://webglfundamentals.org/webgl/lessons/webgl-render-to-texture.html
 https://antongerdelan.net/opengl/webgl_starter.html
 https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/Tutorial/Adding_2D_content_to_a_WebGL_context
 
-Apologies for the code being so hard to read. If this is your question, the algorithm is not elegant.
+Apologies for the code being so hard to read.
+
 If you want to modify it, play around with the values in constants.js.
-The shaders are in the index.html file. Most of the logic happens there.
+The shaders are in the index.html file. Most of the logic happens there; this file only contains the overhead.
+
+The concept:
+  Initially, 15% of the cells is red, the other 85% is blue, distributed randomly.
+  If you want to see the initial state, set SKIP_FIRST_ITERATIONS=0 and ONLY_RUN_MAINLOOP_ON_CLICK=True in constants.js
+  From then on, every iteration is calculated deterministically, meaning that no randomness is involved.
+  All cells are treated the same; they do not have any hidden characteristics. Each cell has two properties:
+  Its "heat", which is represented by blue-red on screen, and an invisible "boost" that cells that get too cold receive.
 
 Program structure:
 - Initialisation
 - Set some cells red (randomised)
-- Main loop
+- Run some (default: 6) iterations before the user sees the grid for the first time
+- Then, run the main loop
+- How an iteration step works:
   - Calculate the surrounding warmth for each cell (draw it to the surroundingWarmth texture)
   - Exchange heat between the cells.
     - Each cell gives off a certain percentageof its heat to nearby cells but also receives heat from them.
@@ -31,6 +41,7 @@ Program structure:
   heat and boost are stored in one texture. There are two of those textures:
     - One stores the current values, the results of this iteration are rendered to the other one.
     - Each generation, they are swapped.
+    - The fragment shader ("fragmentshader_heat_to_screen") uses both of them and blends them over the time.
 */
 console.log("Starting WebGL");
 
@@ -188,9 +199,11 @@ gl.clearColor(0., 1., 1., 1.);
 gl.clear(gl.COLOR_BUFFER_BIT);
 */
 
-var location_heat_in_heatToScreen_program = gl.getUniformLocation(heatToScreen_program, "currentHeat");
+var location_heat0_in_heatToScreen_program = gl.getUniformLocation(heatToScreen_program, "heat0");
+var location_heat1_in_heatToScreen_program = gl.getUniformLocation(heatToScreen_program, "heat1");
 var location_vp_in_heatToScreen_program = gl.getAttribLocation(heatToScreen_program, "vp");
 var location_inverseCanvasSize_in_heatToScreen_program = gl.getUniformLocation(heatToScreen_program, "inverseCanvasSize");
+var location_blendHeat_in_heatToScreen_program = gl.getUniformLocation(heatToScreen_program, "blend_heat");
 
 var location_heat_boost_in_calc_surroundingWarmth_program = gl.getUniformLocation(
   calc_surroundingWarmth_program, "heat_boost");
@@ -214,6 +227,8 @@ var heat_boost_next = heat_boost_1;
 render_to_heat_boost_next = render_to_heat_boost_1;
 
 var iteration_index = 0;
+
+let current, millis_since_last_frame, millis_since_last_iteration, millis_since_last_second;
 
 var stop_mainloop = true;
 
@@ -272,6 +287,9 @@ function calc_next_iteration() {
 }
 
 function render_heat_to_screen() {
+  gl.uniform1f(location_blendHeat_in_heatToScreen_program,
+    Math.max(0., Math.min(1., millis_since_last_iteration*ITERATIONS_PER_SECOND/1000.)));
+  //console.log(Math.max(0., Math.min(1., millis_since_last_iteration*ITERATIONS_PER_SECOND/1000.)));
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 }
 
@@ -285,7 +303,10 @@ function bind_for_rendering_to_screen() {
   gl.useProgram(heatToScreen_program);
   gl.activeTexture(gl.TEXTURE0);
   gl.bindTexture(gl.TEXTURE_2D, heat_boost_current);
-  gl.uniform1i(location_heat_in_heatToScreen_program, 0);
+  gl.uniform1i(location_heat0_in_heatToScreen_program, 0);
+  gl.activeTexture(gl.TEXTURE1);
+  gl.bindTexture(gl.TEXTURE_2D, heat_boost_next);
+  gl.uniform1i(location_heat1_in_heatToScreen_program, 1);
   gl.uniform2f(location_inverseCanvasSize_in_heatToScreen_program, 1/1024, 1/1024);// 1./canvas.width, 1./canvas.height);
   bind_square_vertexbuffer(location_vp_in_heatToScreen_program);
 }
@@ -293,10 +314,10 @@ function bind_for_rendering_to_screen() {
 function main_loop() {
   //console.log("Mainloop...");
   // update timers
-  var current_millis = performance.now();
-  var millis_since_last_frame = current_millis - time_last_frame;
-  var millis_since_last_iteration = current_millis - time_last_iteration;
-  var millis_since_last_second = current_millis - time_last_second;
+  current_millis = performance.now();
+  millis_since_last_frame = current_millis - time_last_frame;
+  millis_since_last_iteration = current_millis - time_last_iteration;
+  millis_since_last_second = current_millis - time_last_second;
   
   if (millis_since_last_frame > 990/FRAMES_PER_SECOND) {
     // It's time to render to screen
@@ -342,6 +363,7 @@ for (i=0; i<SKIP_FIRST_ITERATIONS; i++) {
 }
 
 bind_for_rendering_to_screen();
+millis_since_last_iteration = 1000./ITERATIONS_PER_SECOND;
 render_heat_to_screen();
 
 var time_last_frame = performance.now();

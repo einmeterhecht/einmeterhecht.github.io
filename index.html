@@ -51,14 +51,19 @@
         </script>
         <script id="fragmentshader_heat_to_screen.glsl" type="text/glsl">
             precision highp float;
-            uniform sampler2D heat;
+            uniform sampler2D heat0;
+            uniform sampler2D heat1;
+            uniform float blend_heat; // 0. to 1.
             uniform vec2 inverseCanvasSize;
 
             //INSERT_PACK_FUNCTIONS_HERE
             
             void main () {
-              float heat_here = unpack_heat(texture2D(heat,
-               gl_FragCoord.xy*inverseCanvasSize));
+              float heat_here = (
+                unpack_heat(texture2D(heat0, gl_FragCoord.xy*inverseCanvasSize))
+                * blend_heat +
+                unpack_heat(texture2D(heat1, gl_FragCoord.xy*inverseCanvasSize))
+                * (1. - blend_heat));
               float red = (heat_here - 2.) * 0.2;
               float green = 0.;
               float blue = (heat_here - 2.) * -0.4;
