@@ -69,15 +69,32 @@
                 unpack_heat(texture2D(heat1, gl_FragCoord.xy*inverseCanvasSize))
                 * (1. - blend_heat));
               
-              float c = unpack_heat(texture2D(
-                heat0, gl_FragCoord.xy*INVERSE_CELL_COUNT));
-              float b = unpack_dHeatdt(texture2D(
-                heat0, gl_FragCoord.xy*INVERSE_CELL_COUNT));
-              float a = unpack_heat(texture2D(
-                heat1, gl_FragCoord.xy*INVERSE_CELL_COUNT)
-                ) - b - c;
+              /*
+              // Fit a parabola through heat values of the previous (heat0) and next (heat1) iteration
+                 and the derivative at the endpoint (dHeatdt from heat0) of the previous parabola
               
-              //float heat_now = a*blend_heat*blend_heat + b*blend_heat + c;
+              float c = unpack_heat(texture2D(
+                heat0, gl_FragCoord.xy*inverseCanvasSize));
+              float b = unpack_dHeatdt(texture2D(
+                heat0, gl_FragCoord.xy*inverseCanvasSize));
+              float a = unpack_heat(texture2D(
+                heat1, gl_FragCoord.xy*inverseCanvasSize)
+                ) - b - c;
+              */
+              
+              /*
+              // Fit a parabola through heat values of the
+                 pre-previous (heat0.alpha), previous (heat0) and next (heat1) iteration
+              float c = unpack_heat(texture2D(
+                heat1, gl_FragCoord.xy*inverseCanvasSize));
+              float a = (unpack_dHeatdt(texture2D(heat1, gl_FragCoord.xy*inverseCanvasSize)) + 
+                unpack_heat(texture2D(heat0, gl_FragCoord.xy*inverseCanvasSize)))*.5-c;
+              float b = unpack_heat(texture2D(
+                heat0, gl_FragCoord.xy*inverseCanvasSize)) - a - c;
+              */
+              
+              // Use a quadratic function
+              // heat_now = a*blend_heat*blend_heat + b*blend_heat + c;
               
               float red = (heat_now - 2.) * 0.2;
               float green = 0.;
@@ -122,13 +139,7 @@
                   x_diff, y_diff);
               }
             }
-            /*
-            float c = unpack_heat(texture2D(
-              heat_boost_previous, gl_FragCoord.xy*INVERSE_CELL_COUNT));
-            float b = unpack_dHeatdt(texture2D(
-              heat_boost_dHeatdt, gl_FragCoord.xy*INVERSE_CELL_COUNT));
-            float a = heat_here - b - c;
-            */
+            
             // Pack by high-byte / low.byte (map range 0. - 256. to 0. - 1.)
             gl_FragColor.rg = pack_surroundingWarmth(totalsurroundingWarmth_here);
           }
@@ -208,8 +219,14 @@
                 boost_here = BOOST_STRENGTH;
               }
             }
+            
+            /*
+            float c = unpack_heat(heat_boost_dHeatdt_here);
+            float b = dHeatdt_here;
+            float a = heat_here - b - c;
+            */
+
             gl_FragColor = vec4(pack_heat(heat_here), pack_boost(boost_here), pack_dHeatdt(0.));
-            //gl_FragColor = vec4(pack_heat(unpack_heat(heat_boost_dHeatdt_here)), pack_boost(unpack_boost(heat_boost_dHeatdt_here)), pack_dHeatdt(0.));
             return;
           }
         </script>
