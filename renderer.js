@@ -130,13 +130,19 @@ function compile_shaders_to_program(vertexshader_id, fragmentshader_id) {
   if(!gl.getShaderParameter(vs, gl.COMPILE_STATUS)) {
     console.error("ERROR compiling vert shader " + vertexshader_id + ". log: " +
       gl.getShaderInfoLog(vs));
-      console.log(vertexshader_string);
+      lines = vertexshader_string.match(/[^\n]*[\n]/g);
+      for (line_index in lines) {
+        console.log(Number(line_index)+1, lines[line_index])
+      }
   }
   gl.compileShader(fs);
   if(!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
     console.error("ERROR compiling frag shader " + fragmentshader_id + ". log: " +
       gl.getShaderInfoLog(fs));
-      console.log(fragmentshader_string);
+      lines = fragmentshader_string.match(/[^\n]*[\n]/g);
+      for (line_index in lines) {
+        console.log(Number(line_index)+1, lines[line_index])
+      }
   }
   shader_program = gl.createProgram();
   gl.attachShader(shader_program, vs);
@@ -157,14 +163,14 @@ function compile_shaders_to_program(vertexshader_id, fragmentshader_id) {
 var square_vertex_buffer = load_vertexbuffer();
 
 // heat in RG,  boost in BA
-heat_boost_0 = empty_texture(CELLS_X, CELLS_Y, gl.RGBA);
-heat_boost_1 = empty_texture(CELLS_X, CELLS_Y, gl.RGBA);
+heat_boost_dHeatdt_0 = empty_texture(CELLS_X, CELLS_Y, gl.RGBA);
+heat_boost_dHeatdt_1 = empty_texture(CELLS_X, CELLS_Y, gl.RGBA);
 
 // surroundingWarmth in RG, but GL requires three components for a render target
 surroundingWarmth = empty_texture(CELLS_X, CELLS_Y, gl.RGB);
 
-render_to_heat_boost_0 = create_framebuffer(heat_boost_0);
-render_to_heat_boost_1 = create_framebuffer(heat_boost_1);
+render_to_heat_boost_dHeatdt_0 = create_framebuffer(heat_boost_dHeatdt_0);
+render_to_heat_boost_dHeatdt_1 = create_framebuffer(heat_boost_dHeatdt_1);
 render_to_surroundingWarmth = create_framebuffer(surroundingWarmth);
 
 var initialise_heat_program = compile_shaders_to_program(
@@ -177,9 +183,9 @@ var calc_surroundingWarmth_program = compile_shaders_to_program(
   "fragmentshader_calc_surroundingWarmth.glsl"
 );
 
-var calc_next_heat_boost_program = compile_shaders_to_program(
+var calc_next_heat_boost_dHeatdt_program = compile_shaders_to_program(
   "vertexshader_passthrough_2d.glsl",
-  "fragmentshader_calc_next_heat_boost.glsl"
+  "fragmentshader_calc_next_heat_boost_dHeatdt.glsl"
 );
 
 var heatToScreen_program = compile_shaders_to_program(
@@ -187,7 +193,7 @@ var heatToScreen_program = compile_shaders_to_program(
   "fragmentshader_heat_to_screen.glsl"
 );
 
-gl.bindFramebuffer(gl.FRAMEBUFFER, render_to_heat_boost_0);
+gl.bindFramebuffer(gl.FRAMEBUFFER, render_to_heat_boost_dHeatdt_0);
 gl.viewport(0, 0, CELLS_X, CELLS_Y);
 
 gl.useProgram(initialise_heat_program);
@@ -201,30 +207,27 @@ gl.clear(gl.COLOR_BUFFER_BIT);
 
 var location_heat0_in_heatToScreen_program = gl.getUniformLocation(heatToScreen_program, "heat0");
 var location_heat1_in_heatToScreen_program = gl.getUniformLocation(heatToScreen_program, "heat1");
-var location_vp_in_heatToScreen_program = gl.getAttribLocation(heatToScreen_program, "vp");
-var location_inverseCanvasSize_in_heatToScreen_program = gl.getUniformLocation(heatToScreen_program, "inverseCanvasSize");
+var location_surroundingWarmth_in_heatToScreen_program = gl.getUniformLocation(heatToScreen_program, "surroundingWarmth");
 var location_blendHeat_in_heatToScreen_program = gl.getUniformLocation(heatToScreen_program, "blend_heat");
+var location_inverseCanvasSize_in_heatToScreen_program = gl.getUniformLocation(heatToScreen_program, "inverseCanvasSize");
+var location_vp_in_heatToScreen_program = gl.getAttribLocation(heatToScreen_program, "vp");
 
-var location_heat_boost_in_calc_surroundingWarmth_program = gl.getUniformLocation(
-  calc_surroundingWarmth_program, "heat_boost");
-var location_inverseCellCount_in_calc_surroundingWarmth_program = gl.getUniformLocation(
-  calc_surroundingWarmth_program, "inverseCellCount");
+var location_heat_in_calc_surroundingWarmth_program = gl.getUniformLocation(
+  calc_surroundingWarmth_program, "heat_boost_dHeatdt");
 var location_vp_in_calc_surroundingWarmth_program = gl.getAttribLocation(
   calc_surroundingWarmth_program, "vp");
 
 
-var location_heat_boost_in_calc_next_heat_boost_program = gl.getUniformLocation(
-  calc_next_heat_boost_program, "heat_boost");
-var location_surroundingWarmth_in_calc_next_heat_boost_program = gl.getUniformLocation(
-  calc_next_heat_boost_program, "surroundingWarmth");
-var location_inverseCellCount_in_calc_next_heat_boost_program = gl.getUniformLocation(
-  calc_next_heat_boost_program, "inverseCellCount");
-var location_vp_in_calc_next_heat_boost_program = gl.getAttribLocation(
-  calc_next_heat_boost_program, "vp");
+var location_heat_boost_dHeatdt_in_calc_iteration_program = gl.getUniformLocation(
+  calc_next_heat_boost_dHeatdt_program, "heat_boost_dHeatdt");
+var location_surroundingWarmth_in_calc_iteration_program = gl.getUniformLocation(
+  calc_next_heat_boost_dHeatdt_program, "surroundingWarmth");
+var location_vp_in_calc_iteration_program = gl.getAttribLocation(
+  calc_next_heat_boost_dHeatdt_program, "vp");
 
-var heat_boost_current = heat_boost_0;
-var heat_boost_next = heat_boost_1;
-render_to_heat_boost_next = render_to_heat_boost_1;
+var heat_boost_dHeatdt_current = heat_boost_dHeatdt_0;
+var heat_boost_dHeatdt_next = heat_boost_dHeatdt_1;
+render_to_heat_boost_dHeatdt_next = render_to_heat_boost_dHeatdt_1;
 
 var iteration_index = 0;
 
@@ -241,46 +244,39 @@ function calc_next_iteration() {
   gl.viewport(0, 0, CELLS_X, CELLS_Y);
 
   gl.activeTexture(gl.TEXTURE0);
-  gl.bindTexture(gl.TEXTURE_2D, heat_boost_current);
-  gl.uniform1i(location_heat_boost_in_calc_surroundingWarmth_program, 0);
-
-  gl.uniform2f(location_inverseCellCount_in_calc_surroundingWarmth_program,
-    1./CELLS_X, 1./CELLS_Y);
+  gl.bindTexture(gl.TEXTURE_2D, heat_boost_dHeatdt_current);
+  gl.uniform1i(location_heat_in_calc_surroundingWarmth_program, 0);
 
   bind_square_vertexbuffer(location_vp_in_calc_surroundingWarmth_program);
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-  
 
   // Calculate next iteration for each cell
-  gl.useProgram(calc_next_heat_boost_program);
+  gl.useProgram(calc_next_heat_boost_dHeatdt_program);
   
-  gl.bindFramebuffer(gl.FRAMEBUFFER, render_to_heat_boost_next);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, render_to_heat_boost_dHeatdt_next);
   gl.viewport(0, 0, CELLS_X, CELLS_Y);
 
   gl.activeTexture(gl.TEXTURE0);
-  gl.bindTexture(gl.TEXTURE_2D, heat_boost_current);
-  gl.uniform1i(location_surroundingWarmth_in_calc_next_heat_boost_program, 0);
+  gl.bindTexture(gl.TEXTURE_2D, heat_boost_dHeatdt_current);
+  gl.uniform1i(location_surroundingWarmth_in_calc_iteration_program, 0);
 
   gl.activeTexture(gl.TEXTURE1);
   gl.bindTexture(gl.TEXTURE_2D, surroundingWarmth);
-  gl.uniform1i(location_surroundingWarmth_in_calc_next_heat_boost_program, 1);
+  gl.uniform1i(location_surroundingWarmth_in_calc_iteration_program, 1);
 
-  gl.uniform2f(location_inverseCellCount_in_calc_next_heat_boost_program,
-    1./CELLS_X, 1./CELLS_Y);
-
-  bind_square_vertexbuffer(location_vp_in_calc_next_heat_boost_program);
+  bind_square_vertexbuffer(location_vp_in_calc_iteration_program);
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   
   // Swap buffers
   if (iteration_index % 2 == 0) {
-    heat_boost_current = heat_boost_1;
-    heat_boost_next = heat_boost_0;
-    render_to_heat_boost_next = render_to_heat_boost_0;
+    heat_boost_dHeatdt_current = heat_boost_dHeatdt_1;
+    heat_boost_dHeatdt_next = heat_boost_dHeatdt_0;
+    render_to_heat_boost_dHeatdt_next = render_to_heat_boost_dHeatdt_0;
   }
   else {
-    heat_boost_current = heat_boost_0;
-    heat_boost_next = heat_boost_1;
-    render_to_heat_boost_next = render_to_heat_boost_1;
+    heat_boost_dHeatdt_current = heat_boost_dHeatdt_0;
+    heat_boost_dHeatdt_next = heat_boost_dHeatdt_1;
+    render_to_heat_boost_dHeatdt_next = render_to_heat_boost_dHeatdt_1;
   }
 
   iteration_index++;
@@ -302,11 +298,14 @@ function bind_for_rendering_to_screen() {
   //gl.clear(gl.COLOR_BUFFER_BIT);
   gl.useProgram(heatToScreen_program);
   gl.activeTexture(gl.TEXTURE0);
-  gl.bindTexture(gl.TEXTURE_2D, heat_boost_current);
+  gl.bindTexture(gl.TEXTURE_2D, heat_boost_dHeatdt_current);
   gl.uniform1i(location_heat0_in_heatToScreen_program, 0);
   gl.activeTexture(gl.TEXTURE1);
-  gl.bindTexture(gl.TEXTURE_2D, heat_boost_next);
+  gl.bindTexture(gl.TEXTURE_2D, heat_boost_dHeatdt_next);
   gl.uniform1i(location_heat1_in_heatToScreen_program, 1);
+  gl.activeTexture(gl.TEXTURE2);
+  gl.bindTexture(gl.TEXTURE_2D, surroundingWarmth);
+  gl.uniform1i(location_surroundingWarmth_in_heatToScreen_program, 2);
   gl.uniform2f(location_inverseCanvasSize_in_heatToScreen_program, 1/1024, 1/1024);// 1./canvas.width, 1./canvas.height);
   bind_square_vertexbuffer(location_vp_in_heatToScreen_program);
 }
