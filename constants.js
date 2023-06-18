@@ -2,7 +2,7 @@ const CELLS_X = 128;
 const CELLS_Y = 128;
 
 const FRAMES_PER_SECOND = 32; // Seems to be limited to 30
-const ITERATIONS_PER_SECOND = 6;
+const ITERATIONS_PER_SECOND = 8;
 
 const LOG_FPS = false;
 
